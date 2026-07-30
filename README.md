@@ -1,111 +1,116 @@
-# 📋 Kleinanzeigen – Anzeige duplizieren / neu einstellen
+# 🛠️ Kleinanzeigen Tools
 
-> Ein Userscript das beim Bearbeiten einer Anzeige auf [kleinanzeigen.de](https://www.kleinanzeigen.de) zwei zusätzliche Buttons hinzufügt: **Duplizieren** und **Neu einstellen**.
+A Tampermonkey userscript that adds a compact control panel to the Kleinanzeigen edit-listing page. It provides actions to duplicate an ad or attempt to relist it.
 
-![Version](https://img.shields.io/badge/version-3.1.0-blue)
-![License](https://img.shields.io/badge/license-GNU%20GENERAL%20PUBLIC%20LICENSE%20V3-green)
-![Platform](https://img.shields.io/badge/platform-Chromium%20%7C%20Console-orange)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Platform](https://img.shields.io/badge/platform-Tampermonkey-orange)
+![Browser](https://img.shields.io/badge/browser-Chrome%20%7C%20Edge%20%7C%20Firefox-blueviolet)
+![License](https://img.shields.io/badge/license-GPL--3.0-green)
 
-`ℹ️ Kein Tampermonkey o.ä. Skript-Addon benötigt! Läuft on-the-fly aus der Browser-Console!`
+> [!WARNING]
+> **Use this script entirely at your own risk.** Kleinanzeigen is a third-party service. This is an unofficial, independent project and is not affiliated with, endorsed by, or supported by Kleinanzeigen.
 
-ℹ️Link to Github GIST: https://gist.github.com/RIPENCE/9d97011a3c6aad447e454b4bddd17874
+> [!CAUTION]
+> The script interacts with undocumented website behavior and endpoints that can change at any time. It may fail, create incorrect or duplicate listings, delete listings, or otherwise cause unintended results.
+>
+> You are solely responsible for reviewing the source code, testing it safely, and for every action performed with this script. The author and contributors accept no liability for data loss, deleted listings, account restrictions, financial loss, or any other direct or indirect damage resulting from its use.
 
----
+## Features
 
-## ✨ Features
-
-| Funktion | Beschreibung |
+| Action | Description |
 |---|---|
-| 📋 **Duplizieren** | Erstellt eine neue Kopie der Anzeige mit allen Daten (Titel, Beschreibung, Bilder, Kategorie, Preis usw.) |
-| 🔄 **Neu einstellen** | Löscht die alte Anzeige und stellt sie als neue ein – ideal um die Anzeige wieder nach oben zu bringen |
+| 📋 **Anzeige duplizieren** | Creates a new listing from the values currently present in the edit form. |
+| 🔄 **Neu einstellen** | Attempts to delete the original listing and create a replacement listing. |
+| 🪟 **Floating panel** | Adds a panel in the lower-right corner rather than relying on Kleinanzeigen UI classes or save-button placement. |
+| 🔎 **Status messages** | Displays the detected ad ID plus success and error messages directly in the panel. |
 
----
+## Screenshot
 
-## 📸 Screenshot
+The userscript displays a **Kleinanzeigen Tools** panel at the bottom-right of the edit page.
 
-Die beiden Buttons erscheinen direkt neben dem **„Anzeige speichern"**-Button:
+![screenshot.png](screenshot.png)
 
-> `Vorschau` · `Anzeige speichern` · `📋 Duplizieren` · `🔄 Neu einstellen`
+The floating panel is deliberate: the Kleinanzeigen interface is React-based and may change its button classes, hierarchy, or page layout at any time.
 
-> <img width="969" height="240" alt="image" src="https://github.com/user-attachments/assets/deaf6438-c0ea-4407-af3f-4835434aa020" />
+## Requirements
 
+- A supported desktop browser:
+  - Google Chrome
+  - Microsoft Edge
+  - Mozilla Firefox
+  - Vivaldi
+- The [Tampermonkey](https://www.tampermonkey.net/) browser extension
+- An active, logged-in Kleinanzeigen account
+- An existing ad opened in edit mode
 
----
+Tampermonkey injects scripts according to the metadata block; `@run-at document-idle` runs after the document’s `DOMContentLoaded` event. See [Tampermonkey documentation](https://www.tampermonkey.net/documentation.php?locale=en&q=run_at).
 
-## 🔧 Verwendung
+## Installation
 
-1. Auf [kleinanzeigen.de](https://www.kleinanzeigen.de) einloggen
-2. Eine eigene Anzeige öffnen und auf **„Bearbeiten"** klicken
-3. Im "Anzeige bearbeiten" Fenster F12 drücken (Entwickler-Tools öffnen sich)
-4. In den Consolen Tab wechseln
-5. Skript dort Copy & Paste einfügen
-6. Die zwei neuen Buttons erscheinen neben „Anzeige speichern"
+### Option A – Direct install (recommended)
 
-### 📋 Duplizieren
+1. Install [Tampermonkey](https://www.tampermonkey.net/) in your browser.
+2. Click this direct-install link:  
+   [`https://raw.githubusercontent.com/mdjdev/kleinanzeigen-tools/main/kleinanzeigen-tools.user.js`](https://raw.githubusercontent.com/mdjdev/kleinanzeigen-tools/main/kleinanzeigen-tools.user.js)
+3. Tampermonkey will prompt you to install the script.
+4. Confirm the installation and ensure the script is enabled in the dashboard.
 
-- Klick auf **„📋 Duplizieren"**
-- Das Skript schickt alle Formulardaten als neue Anzeige ab
-- Nach dem Speichern wird automatisch weitergeleitet
+### Option B – Manual install
 
-### 🔄 Neu einstellen
+1. Install [Tampermonkey](https://www.tampermonkey.net/) in your browser.
+2. Open the Tampermonkey dashboard.
+3. Select **Create a new script**.
+4. Remove the generated template.
+5. Paste the full contents of [`kleinanzeigen-tools.user.js`](kleinanzeigen-tools.user.js).
+6. Save the script with `Ctrl` + `S`.
+7. Ensure that the script is enabled in the Tampermonkey dashboard.
 
-- Klick auf **„🔄 Neu einstellen"**
-- Bestätigungsdialog erscheint
-- Die alte Anzeige wird gelöscht, dann als neue Anzeige eingestellt
+The script is intentionally limited to Kleinanzeigen edit pages:
 
----
+```js
+// @match https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html*
+```
 
-## 🌐 Kompatibilität
+## Usage
 
-| Browser | Status |
-|---|---|
-| Chrome     | ✅ |
-| Edge       | ✅ |
-| Firefox    | ✅ |
-| Vivaldi    | ✅ |
+1. Log in at [kleinanzeigen.de](https://www.kleinanzeigen.de).
+2. Open **Meins** / **Meine Anzeigen**.
+3. Select one of your own listings.
+4. Click **Bearbeiten**.
+5. Wait until the page has loaded.
+6. Look for the **Kleinanzeigen Tools** panel at the lower-right of the page.
+7. Choose one of the available actions.
 
----
+### Duplicate an ad
 
-## ⚙️ Technische Details
+1. Open the listing in edit mode.
+2. Optionally adjust the form values before creating the duplicate.
+3. Click **📋 Anzeige duplizieren**.
+4. Wait for the success status and automatic redirect.
 
-Die neue Kleinanzeigen-Seite (seit 2025) ist eine vollständige **React-SPA**. Das Skript arbeitet daher nicht mehr mit dem klassischen Formular-Submit, sondern spricht die internen APIs direkt an:
+The original listing remains unchanged.
 
-- **Submit:** `POST https://www.kleinanzeigen.de/_actions/postListingWeb.submitListing/`  
-  Als `multipart/form-data` mit CSRF-Token aus dem Hidden-Input
-- **Delete:** `DELETE https://gateway.kleinanzeigen.de/ad-service/ads/{adId}`  
-  Mit Bearer-Token aus dem Session-Cookie
-- **Modal-Handling:** Upsell-Popups werden automatisch per `MutationObserver` weggeklickt
+### Relist an ad
 
----
+1. Open the listing in edit mode.
+2. Click **🔄 Neu einstellen**.
+3. Confirm the warning dialog.
+4. The script first tries to delete the original listing.
+5. It then attempts to submit the current form as a new listing.
 
-## 📋 Changelog
+> [!CAUTION]
+> **Neu einstellen** may delete the original listing. Use this only if you understand and accept the risk of losing the original ad.
 
-### v3.1.0
-- Komplette Neuentwicklung für die neue React-basierte Kleinanzeigen-Seite
-- CSRF-Token wird jetzt aus dem Hidden-Input `input[name="_csrf"]` gelesen
-- Delete-Funktion nutzt die neue Gateway-API mit Bearer-Token
-- Formulardaten werden direkt per API-Call übermittelt (kein React-Button-Click mehr)
+## Contributing
 
----
+Issues and pull requests are welcome.
 
-## ⚠️ Hinweise
+For bug reports, include a concise description of the problem and sanitized console output. Do not include account credentials, cookies, access tokens, or private listing data.
 
-- Das Skript funktioniert nur wenn du **eingeloggt** bist
-- **„Neu einstellen"** löscht die ursprüngliche Anzeige unwiderruflich
-- Kleinanzeigen kann jederzeit ihre API ändern – bei Problemen bitte ein [Issue](../../issues) öffnen
-- Dieses Skript ist kein offizielles Produkt von Kleinanzeigen
+## License
 
----
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
-## 📄 Lizenz
+## Credits
 
-GNU GPL License – siehe [LICENSE](LICENSE)
-
----
-
-## 🙏 Credits
-
-Ursprünglich entwickelt von [J05HI](https://gist.github.com/J05HI).  
-Für die neue React-Seite komplett überarbeitet.
-
-#fixedWithClaudeCode
+This repository originated as a fork of the [Kleinanzeigen duplicate-script project by RIPENCE](https://github.com/RIPENCE/Kleinanzeigen_Duplicate_Script) and earlier contributors.
