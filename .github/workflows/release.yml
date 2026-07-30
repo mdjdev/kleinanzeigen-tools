@@ -27,7 +27,7 @@ jobs:
           TAG_VERSION=${{ steps.get_version.outputs.version }}
 
           # 1. Script metadata
-          SCRIPT_VERSION=$(grep -oP '@version\s+\K[0-9]+\.[0-9]+\.[0-9]+' kleinanzeigen-tools.js)
+          SCRIPT_VERSION=$(grep -oP '@version\s+\K[0-9]+\.[0-9]+\.[0-9]+' kleinanzeigen-tools.user.js)
           if [ "$SCRIPT_VERSION" != "$TAG_VERSION" ]; then
             echo "Error: Script @version ($SCRIPT_VERSION) does not match tag ($TAG_VERSION)"
             exit 1
@@ -67,4 +67,4 @@ jobs:
         with:
           name: Release v${{ steps.get_version.outputs.version }}
           body_path: ${{ runner.temp }}/release-body.md
-          files: kleinanzeigen-tools.js
+          files: kleinanzeigen-tools.user.js

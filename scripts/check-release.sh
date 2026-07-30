@@ -6,7 +6,7 @@ set -euo pipefail
 # Run before tagging to catch mismatches early.
 # Usage: ./scripts/check-release.sh [EXPECTED_VERSION]
 
-SCRIPT_FILE="kleinanzeigen-tools.js"
+SCRIPT_FILE="kleinanzeigen-tools.user.js"
 README_FILE="README.md"
 CHANGELOG_FILE="CHANGELOG.md"
 
