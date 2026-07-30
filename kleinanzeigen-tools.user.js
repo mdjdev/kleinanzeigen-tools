@@ -1,221 +1,322 @@
 // ==UserScript==
-// @name          Kleinanzeigen - Anzeige duplizieren / neu einstellen
-// @author        Michi / RIPENCE
-// @description   Einfügen via F12 (Console) im "Anzeige bearbeiten" Modus. Stellt zwei Buttons "Anzeige duplizieren" und "Anzeige neu einstellen" zur Verfügung.
-// @description   Anzeige duplizieren = Klonen // Anzeige neu einstellen = Anzeige klonen und alte Anzeige automatisch löschen
-// @icon          http://www.google.com/s2/favicons?domain=www.kleinanzeigen.de
-// @license       GNU Gernal Public License v3.0
-// @version       3.1
-// @match         https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html*
-// #fixedWithClaudeCode
+// @name         Kleinanzeigen Tools
+// @namespace    https://github.com/mdjdev/kleinanzeigen-tools
+// @version      1.0.0
+// @description  Dupliziert oder stellt Kleinanzeigen-Inserate neu ein
+// @match        https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html*
+// @icon         https://www.google.com/s2/favicons?domain=www.kleinanzeigen.de
+// @grant        none
+// @run-at       document-idle
+// @updateURL    https://raw.githubusercontent.com/mdjdev/kleinanzeigen-tools/main/kleinanzeigen-tools.user.js
+// @downloadURL  https://raw.githubusercontent.com/mdjdev/kleinanzeigen-tools/main/kleinanzeigen-tools.user.js
 // ==/UserScript==
 
-(function () {
+(() => {
     'use strict';
 
-    function waitForElement(selector, timeout = 15000) {
-        return new Promise((resolve, reject) => {
-            const existing = document.querySelector(selector);
-            if (existing) return resolve(existing);
-            const observer = new MutationObserver(() => {
-                const el = document.querySelector(selector);
-                if (el) { observer.disconnect(); resolve(el); }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-            setTimeout(() => { observer.disconnect(); reject(new Error(`"${selector}" nicht gefunden`)); }, timeout);
-        });
+    const PREFIX = '[KAZ Tools]';
+    const PANEL_ID = 'kaz-tools-panel';
+
+    function log(...args) {
+        console.log(PREFIX, ...args);
+    }
+
+    function getForm() {
+        return document.querySelector('form');
+    }
+
+    function getAdId() {
+        return (
+            document.querySelector('input[name="adId"]')?.value ||
+            new URLSearchParams(location.search).get('adId')
+        );
     }
 
     function getCsrfToken() {
-        return document.querySelector('input[name="_csrf"]')?.value || null;
+        return (
+            document.querySelector('input[name="_csrf"]')?.value ||
+            document.querySelector('meta[name="csrf-token"]')?.content ||
+            null
+        );
     }
 
-    function collectFormData(includeAdId = false) {
-        const form = document.querySelector('form');
-        if (!form) return null;
+    function collectFormData() {
+        const form = getForm();
+
+        if (!form) {
+            throw new Error('Kein Formular gefunden. Seite vollständig laden lassen und erneut versuchen.');
+        }
 
         const data = new FormData();
-        const inputs = form.querySelectorAll('input, textarea, select');
-        inputs.forEach(input => {
-            if (!input.name) return;
-            if (input.name === 'adId' && !includeAdId) return;
-            if (input.type === 'radio' && !input.checked) return;
-            if (input.type === 'checkbox' && !input.checked) return;
-            data.append(input.name, input.value);
-        });
+
+        for (const field of form.querySelectorAll('input, textarea, select')) {
+            if (!field.name || field.disabled) continue;
+            if (field.name === 'adId') continue;
+            if ((field.type === 'radio' || field.type === 'checkbox') && !field.checked) continue;
+            if (field.type === 'file') continue;
+
+            data.append(field.name, field.value);
+        }
+
+        const csrf = getCsrfToken();
+        if (csrf) data.set('_csrf', csrf);
 
         return data;
     }
 
-    async function submitListing(includeAdId = false) {
-        const csrfToken = getCsrfToken();
-        if (!csrfToken) throw new Error('CSRF-Token nicht gefunden');
+    async function submitListing() {
+        const formData = collectFormData();
 
-        const formData = collectFormData(includeAdId);
-        if (!formData) throw new Error('Formular nicht gefunden');
+        const response = await fetch(
+            'https://www.kleinanzeigen.de/_actions/postListingWeb.submitListing/',
+            {
+                method: 'POST',
+                credentials: 'include',
+                body: formData,
+                headers: {
+                    accept: 'text/html,application/json,*/*',
+                },
+            }
+        );
 
-        formData.set('_csrf', csrfToken);
-
-        const response = await fetch('https://www.kleinanzeigen.de/_actions/postListingWeb.submitListing/', {
-            method: 'POST',
-            body: formData,
-            credentials: 'include',
-        });
+        const responseText = await response.text();
 
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Submit fehlgeschlagen: ${response.status} — ${text.substring(0, 200)}`);
+            throw new Error(`Erstellen fehlgeschlagen: HTTP ${response.status}\n${responseText.slice(0, 400)}`);
         }
 
-        return await response.text();
+        return responseText;
     }
 
     async function deleteAd(adId) {
-        const tokenMatch = document.cookie.match(/access_token=([^;]+)/);
-        const bearerToken = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
+        const csrf = getCsrfToken();
 
-        if (bearerToken) {
-            const response = await fetch(`https://gateway.kleinanzeigen.de/ad-service/ads/${adId}`, {
-                method: 'DELETE',
+        const response = await fetch(
+            `https://www.kleinanzeigen.de/m-anzeigen-loeschen.json?ids=${encodeURIComponent(adId)}`,
+            {
+                method: 'POST',
                 credentials: 'include',
                 headers: {
-                    accept: 'application/json',
-                    authorization: `Bearer ${bearerToken}`,
+                    accept: 'application/json,text/plain,*/*',
+                    ...(csrf ? { 'x-csrf-token': csrf } : {}),
                 },
-            });
-            return response.ok || response.status === 204;
-        }
+            }
+        );
 
-        // Fallback: alte API
-        const csrfToken = getCsrfToken();
-        const response = await fetch(`https://www.kleinanzeigen.de/m-anzeigen-loeschen.json?ids=${adId}`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                accept: 'application/json',
-                ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
-            },
-        });
-        return response.ok;
+        if (!response.ok) {
+            throw new Error(`Löschen fehlgeschlagen: HTTP ${response.status}`);
+        }
     }
 
-    function parseRedirectUrl(responseText) {
-        try {
-            const match = responseText.match(/https:\/\/www\.kleinanzeigen\.de\/[^"\\]+/);
-            if (match) return match[0];
-        } catch {}
+    function redirectUrl(responseText) {
+        const match = responseText.match(
+            /https?:\\?\/\\?\/www\.kleinanzeigen\.de\\?\/[^"'\\\s<]+/
+        );
+
+        if (match) {
+            return match[0]
+                .replaceAll('\\/', '/')
+                .replaceAll('\\', '');
+        }
+
         return 'https://www.kleinanzeigen.de/m-meine-anzeigen.html';
     }
 
-    function showLoading(text = 'Bitte warten...') {
-        document.getElementById('kaz-dup-overlay')?.remove();
-        document.getElementById('kaz-dup-style')?.remove();
-        const style = document.createElement('style');
-        style.id = 'kaz-dup-style';
-        style.textContent = '@keyframes kaz-spin { to { transform: rotate(360deg); } }';
-        document.head.appendChild(style);
-        const overlay = document.createElement('div');
-        overlay.id = 'kaz-dup-overlay';
-        Object.assign(overlay.style, {
-            position: 'fixed', inset: '0', zIndex: '99999',
-            backdropFilter: 'blur(4px)', backgroundColor: 'rgba(0,0,0,0.35)',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: '16px',
-        });
-        const spinner = document.createElement('div');
-        Object.assign(spinner.style, {
-            width: '48px', height: '48px', borderRadius: '50%',
-            border: '5px solid rgba(255,255,255,0.3)', borderTopColor: '#fff',
-            animation: 'kaz-spin 0.8s linear infinite',
-        });
-        const label = document.createElement('div');
-        Object.assign(label.style, {
-            color: '#fff', fontSize: '16px', fontWeight: '600',
-            textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-        });
-        label.textContent = text;
-        overlay.appendChild(spinner);
-        overlay.appendChild(label);
-        document.body.appendChild(overlay);
+    function setStatus(message, type = 'normal') {
+        const status = document.querySelector(`#${PANEL_ID} .kaz-status`);
+        if (!status) return;
+
+        status.textContent = message;
+        status.dataset.type = type;
     }
 
-    function hideLoading() {
-        document.getElementById('kaz-dup-overlay')?.remove();
+    function setBusy(isBusy) {
+        document.querySelectorAll(`#${PANEL_ID} button`).forEach((button) => {
+            button.disabled = isBusy;
+        });
     }
 
-    function createButton(id, text, clickHandler) {
-        const btn = document.createElement('button');
-        btn.id = id;
-        btn.type = 'button';
-        btn.textContent = text;
-        btn.className = [
-            'inline-flex', 'items-center', 'justify-center', 'gap-xsmall',
-            'text-bodyRegularStrong', 'box-border', 'rounded-full', 'cursor-pointer',
-            'whitespace-nowrap', 'no-underline', 'hover:no-underline', 'focus:outline-none',
-            'h-[44px]', 'min-h-[44px]', 'min-w-[44px]', 'w-fit', 'px-medium',
-            'border-2', 'border-solid', 'border-utility', 'text-interactive', 'bg-transparent',
-            'hover:border-secondary', 'hover:bg-secondaryContainer', 'hover:text-onSecondaryContainer',
-        ].join(' ');
-        btn.addEventListener('click', clickHandler);
-        return btn;
-    }
-
-    async function init() {
-        let saveButton;
-        try {
-            saveButton = await waitForElement('button.bg-primary');
-        } catch (e) {
-            console.error('[Duplikat-Script] Speichern-Button nicht gefunden:', e.message);
+    function addPanel() {
+        if (document.getElementById(PANEL_ID)) {
+            log('Panel already exists.');
             return;
         }
 
-        if (document.getElementById('kaz-btn-duplicate')) return;
+        const panel = document.createElement('section');
+        panel.id = PANEL_ID;
 
-        const duplicateBtn = createButton('kaz-btn-duplicate', '📋 Duplizieren', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            showLoading('Anzeige wird dupliziert...');
+        panel.innerHTML = `
+            <div class="kaz-header">
+                <strong>Kleinanzeigen Tools</strong>
+                <button class="kaz-close" type="button" title="Schließen">×</button>
+            </div>
+            <div class="kaz-body">
+                <button class="kaz-action kaz-duplicate" type="button">📋 Anzeige duplizieren</button>
+                <button class="kaz-action kaz-relist" type="button">🔄 Neu einstellen</button>
+                <div class="kaz-status">Bereit. Ad-ID: ${getAdId() || 'nicht gefunden'}</div>
+            </div>
+        `;
+
+        const style = document.createElement('style');
+        style.id = `${PANEL_ID}-style`;
+        style.textContent = `
+            #${PANEL_ID} {
+                position: fixed !important;
+                right: 20px !important;
+                bottom: 20px !important;
+                z-index: 2147483647 !important;
+                width: 290px !important;
+                overflow: hidden !important;
+                border: 1px solid #bbb !important;
+                border-radius: 12px !important;
+                background: #fff !important;
+                color: #1d1d1d !important;
+                box-shadow: 0 8px 30px rgba(0, 0, 0, .3) !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 14px !important;
+                line-height: 1.35 !important;
+            }
+
+            #${PANEL_ID} * {
+                box-sizing: border-box !important;
+            }
+
+            #${PANEL_ID} .kaz-header {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                padding: 12px 14px !important;
+                background: #ff6f00 !important;
+                color: #fff !important;
+            }
+
+            #${PANEL_ID} .kaz-close {
+                width: 28px !important;
+                height: 28px !important;
+                border: 0 !important;
+                border-radius: 5px !important;
+                background: transparent !important;
+                color: #fff !important;
+                font-size: 22px !important;
+                line-height: 1 !important;
+                cursor: pointer !important;
+            }
+
+            #${PANEL_ID} .kaz-body {
+                display: grid !important;
+                gap: 10px !important;
+                padding: 14px !important;
+                background: #fff !important;
+            }
+
+            #${PANEL_ID} .kaz-action {
+                min-height: 42px !important;
+                width: 100% !important;
+                border: 1px solid #555 !important;
+                border-radius: 7px !important;
+                background: #fff !important;
+                color: #111 !important;
+                font-size: 14px !important;
+                font-weight: 700 !important;
+                cursor: pointer !important;
+            }
+
+            #${PANEL_ID} .kaz-action:hover {
+                background: #f3f3f3 !important;
+            }
+
+            #${PANEL_ID} .kaz-action:disabled {
+                opacity: .55 !important;
+                cursor: wait !important;
+            }
+
+            #${PANEL_ID} .kaz-status {
+                padding-top: 2px !important;
+                color: #555 !important;
+                font-size: 12px !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            #${PANEL_ID} .kaz-status[data-type="error"] {
+                color: #b00020 !important;
+                font-weight: 700 !important;
+            }
+        `;
+
+        document.getElementById(`${PANEL_ID}-style`)?.remove();
+        document.head.appendChild(style);
+        document.body.appendChild(panel);
+
+        panel.querySelector('.kaz-close').addEventListener('click', () => {
+            panel.remove();
+        });
+
+        panel.querySelector('.kaz-duplicate').addEventListener('click', async () => {
+            setBusy(true);
+            setStatus('Anzeige wird dupliziert …');
+
             try {
-                const result = await submitListing(false);
-                const url = parseRedirectUrl(result);
-                showLoading('Erfolgreich! Weiterleitung...');
-                setTimeout(() => { window.location.href = url; }, 1500);
-            } catch (err) {
-                hideLoading();
-                alert('Fehler beim Duplizieren:\n' + err.message);
-                console.error('[Duplikat-Script]', err);
+                const responseText = await submitListing();
+                setStatus('Erfolgreich. Weiterleitung …');
+                log('Duplicate response:', responseText.slice(0, 500));
+
+                setTimeout(() => {
+                    location.href = redirectUrl(responseText);
+                }, 800);
+            } catch (error) {
+                console.error(PREFIX, error);
+                setStatus(error.message, 'error');
+                setBusy(false);
             }
         });
 
-        const reinstateBtn = createButton('kaz-btn-reinstate', '🔄 Neu einstellen', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const adIdInput = document.querySelector('input[name="adId"]');
-            const adId = adIdInput?.value || new URLSearchParams(window.location.search).get('adId');
-            if (!adId) { alert('Ad-ID nicht gefunden.'); return; }
-            if (!confirm(`Anzeige #${adId} wird gelöscht und neu eingestellt.\nFortfahren?`)) return;
+        panel.querySelector('.kaz-relist').addEventListener('click', async () => {
+            const adId = getAdId();
 
-            showLoading('Alte Anzeige wird gelöscht...');
+            if (!adId) {
+                setStatus('Ad-ID nicht gefunden.', 'error');
+                return;
+            }
+
+            if (!confirm(`Anzeige #${adId} löschen und neu einstellen?`)) {
+                return;
+            }
+
+            setBusy(true);
+            setStatus('Alte Anzeige wird gelöscht …');
+
             try {
-                const deleted = await deleteAd(adId);
-                if (!deleted) throw new Error('Löschen fehlgeschlagen (HTTP-Fehler)');
-                showLoading('Wird neu eingestellt...');
-                await new Promise(r => setTimeout(r, 2000));
-                const result = await submitListing(false);
-                const url = parseRedirectUrl(result);
-                showLoading('Erfolgreich! Weiterleitung...');
-                setTimeout(() => { window.location.href = url; }, 1500);
-            } catch (err) {
-                hideLoading();
-                alert('Fehler:\n' + err.message);
-                console.error('[Duplikat-Script]', err);
+                await deleteAd(adId);
+
+                setStatus('Neue Anzeige wird erstellt …');
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const responseText = await submitListing();
+                setStatus('Erfolgreich. Weiterleitung …');
+
+                setTimeout(() => {
+                    location.href = redirectUrl(responseText);
+                }, 800);
+            } catch (error) {
+                console.error(PREFIX, error);
+                setStatus(error.message, 'error');
+                setBusy(false);
             }
         });
 
-        saveButton.parentElement.appendChild(duplicateBtn);
-        saveButton.parentElement.appendChild(reinstateBtn);
-        console.log('[Duplikat-Script] v3.1 Buttons erfolgreich eingefügt ✓');
+        log('Floating panel added successfully.');
     }
 
-    init();
+    function start() {
+        log('Userscript loaded:', location.href);
+
+        if (document.body) {
+            addPanel();
+            return;
+        }
+
+        document.addEventListener('DOMContentLoaded', addPanel, { once: true });
+    }
+
+    start();
 })();
